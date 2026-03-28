@@ -13,6 +13,7 @@ use crate::device::{DeviceInfo, DeviceInfoMutex, get_provider, get_provider_from
 
 const PAIRING_APPS: &[(&str, &str)] = &[
     ("SideStore", "ALTPairingFile.mobiledevicepairing"),
+    ("MiniStore", "ALTPairingFile.mobiledevicepairing"),
     (
         "LiveContainer",
         "SideStore/Documents/ALTPairingFile.mobiledevicepairing",
