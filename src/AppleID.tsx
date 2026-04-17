@@ -10,14 +10,16 @@ import { useError } from "./ErrorContext";
 import { Certificate } from "./pages/Certificates";
 import { useTranslation } from "react-i18next";
 
-const store = await load("data.json");
+const storePromise = load("data.json");
 
 export const AppleID = ({
   loggedInAs,
   setLoggedInAs,
+  noKeyringAvailable,
 }: {
   loggedInAs: string | null;
   setLoggedInAs: (id: string | null) => void;
+  noKeyringAvailable: boolean;
 }) => {
   const { t } = useTranslation();
   const [storedIds, setStoredIds] = useState<string[]>([]);
@@ -37,27 +39,13 @@ export const AppleID = ({
   const [chooseCertsOpen, setChooseCertsOpen] = useState<boolean>(false);
   const { err } = useError();
 
-  const [noKeyringAvailable, setNoKeyringAvailable] = useState<boolean>(false);
-
-  useEffect(() => {
-    const checkKeyring = async () => {
-      try {
-        let available = await invoke<boolean>("keyring_available");
-        setNoKeyringAvailable(!available);
-      } catch (e) {
-        console.error("Unable to check keyring availability:", e);
-        setNoKeyringAvailable(true);
-      }
-    };
-    checkKeyring();
-  }, []);
-
   useEffect(() => {
     let getLoggedInAs = async () => {
       let account = await invoke<string | null>("logged_in_as");
       setLoggedInAs(account);
     };
     let getStoredIds = async () => {
+      const store = await storePromise;
       let ids = (await store.get<string[]>("ids")) ?? [];
       setStoredIds(ids);
     };
@@ -215,10 +203,10 @@ export const AppleID = ({
                   toast.warning(t("apple_id.enter_email_password"));
                   return;
                 }
-                if (!emailInput.includes("@")) {
-                  toast.warning(t("apple_id.valid_email"));
-                  return;
-                }
+                // if (!emailInput.includes("@")) {
+                //   toast.warning(t("apple_id.valid_email"));
+                //   return;
+                // }
                 let promise = async () => {
                   await invoke("login_new", {
                     email: emailInput,
@@ -236,7 +224,7 @@ export const AppleID = ({
               }}
             >
               <input
-                type="email"
+                type="text"
                 placeholder={t("apple_id.email_placeholder")}
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}

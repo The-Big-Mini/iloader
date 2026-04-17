@@ -19,7 +19,9 @@ const languages = [
   ["ko", "한국어"],
   ["zh_hk", "Cantonese （粵語)"],
   ["ja", "日本語"],
-  ["cs_cz", "Čeština"]
+  ["cs_cz", "Čeština"],
+  ["sv", "Svenska"],
+  ["hu", "Magyar"],
 ] as const;
 
 export const sortedLanguages = [...languages].sort((a, b) =>

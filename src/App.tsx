@@ -26,6 +26,7 @@ import { checkForUpdates } from "./update";
 import logo from "./iloader.svg";
 import { GlassCard } from "./components/GlassCard";
 import { useTranslation } from "react-i18next";
+import { usePlatform } from "./PlatformContext";
 
 function App() {
   const { t } = useTranslation();
@@ -39,10 +40,25 @@ function App() {
     null | "certificates" | "appids" | "pairing"
   >(null);
   const [version, setVersion] = useState<string>("");
-  const [platform, setPlatform] = useState<"mac" | "windows" | "linux">(
-    "windows",
-  );
+
   const refreshDevicesRef = useRef<(() => void) | null>(null);
+
+  const [noKeyringAvailable, setNoKeyringAvailable] = useState<boolean>(false);
+  const { platform } = usePlatform();
+
+  const checkKeyring = useCallback(async () => {
+    try {
+      let available = await invoke<boolean>("keyring_available");
+      setNoKeyringAvailable(!available);
+    } catch (e) {
+      console.error("Unable to check keyring availability:", e);
+      setNoKeyringAvailable(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkKeyring();
+  }, [checkKeyring]);
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -54,18 +70,6 @@ function App() {
 
   useEffect(() => {
     checkForUpdates();
-  }, []);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined") return;
-    const ua = navigator.userAgent || "";
-    if (ua.includes("Mac")) {
-      setPlatform("mac");
-    } else if (ua.includes("Win")) {
-      setPlatform("windows");
-    } else if (ua.includes("Linux")) {
-      setPlatform("linux");
-    }
   }, []);
 
   const shortcutLabel = useCallback(
@@ -216,7 +220,11 @@ function App() {
               </span>
             </div>
             <GlassCard className="panel">
-              <AppleID loggedInAs={loggedInAs} setLoggedInAs={setLoggedInAs} />
+              <AppleID
+                loggedInAs={loggedInAs}
+                setLoggedInAs={setLoggedInAs}
+                noKeyringAvailable={noKeyringAvailable}
+              />
             </GlassCard>
           </section>
           <section className="workspace-section">
@@ -274,7 +282,9 @@ function App() {
               <p className="section-label">{t("app.devices")}</p>
               <span className="section-hint">
                 {selectedDevice
-                  ? t("app.active_device", { name: selectedDevice.name })
+                  ? t("app.active_device", {
+                      name: `${selectedDevice.name} (${selectedDevice.version})`,
+                    })
                   : t("app.select_device")}
               </span>
             </div>
@@ -301,6 +311,9 @@ function App() {
                     startOperation(installSideStoreOperation, {
                       nightly: false,
                       liveContainer: false,
+                    }).catch((e) => {
+                      console.log(e.type);
+                      console.error(e.message);
                     });
                   }}
                 >
@@ -312,6 +325,9 @@ function App() {
                     startOperation(installSideStoreOperation, {
                       nightly: true,
                       liveContainer: false,
+                    }).catch((e) => {
+                      console.log(e.type);
+                      console.error(e.message);
                     });
                   }}
                 >
@@ -323,6 +339,9 @@ function App() {
                     startOperation(installLiveContainerOperation, {
                       nightly: false,
                       liveContainer: true,
+                    }).catch((e) => {
+                      console.log(e.type);
+                      console.error(e.message);
                     });
                   }}
                 >
@@ -334,6 +353,9 @@ function App() {
                     startOperation(installLiveContainerOperation, {
                       nightly: true,
                       liveContainer: true,
+                    }).catch((e) => {
+                      console.log(e.type);
+                      console.error(e.message);
                     });
                   }}
                 >
@@ -351,6 +373,9 @@ function App() {
                     if (!path) return;
                     startOperation(sideloadOperation, {
                       appPath: path as string,
+                    }).catch((e) => {
+                      console.log(e.type);
+                      console.error(e.message);
                     });
                   }}
                 >
@@ -362,7 +387,13 @@ function App() {
           <section className="workspace-section">
             <p className="section-label">{t("app.settings")}</p>
             <GlassCard className="panel settings-panel">
-              <Settings showHeading={false} />
+              <Settings
+                ensureSelectedDevice={ensureSelectedDevice}
+                setSelectedDevice={setSelectedDevice}
+                platform={platform}
+                shortcutLabel={shortcutLabel}
+                checkKeyring={checkKeyring}
+              />
             </GlassCard>
           </section>
           {operationState && (

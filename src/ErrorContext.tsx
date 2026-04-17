@@ -1,12 +1,26 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { Modal } from "./components/Modal";
 import "./ErrorContext.css";
 import { toast } from "sonner";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Trans, useTranslation } from "react-i18next";
+import { useStore } from "./StoreContext";
+import {
+  AppError,
+  ErrorVariant,
+  getErrorSuggestions,
+  parseLinkToken,
+} from "./errors";
+import { usePlatform } from "./PlatformContext";
 
 export const ErrorContext = createContext<{
-  err: (msg: string, err: string | null) => string;
+  err: (msg: string, err: AppError) => string;
 }>({ err: () => "" });
 
 export const ErrorProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -14,26 +28,43 @@ export const ErrorProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { t } = useTranslation();
   const [msg, setMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [simpleError, setSimpleError] = useState<string | null>(null);
   const [moreDetailsOpen, setMoreDetailsOpen] = useState<boolean>(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [anisetteServer] = useStore<string>(
+    "anisetteServer",
+    "ani.sidestore.io",
+  );
+  const { platform } = usePlatform();
+
+  const getSuggestions = useCallback(
+    (type: ErrorVariant): string[] => {
+      return getErrorSuggestions(t, type, platform, anisetteServer);
+    },
+    [anisetteServer, t, platform],
+  );
 
   useEffect(() => {
     if (!error) {
       setSimpleError(null);
+      setSuggestions([]);
       return;
     }
+    setSuggestions(getSuggestions(error.type));
     // a little bit gross but it gets the job done.
-    let lines = error?.split("\n").filter((line) => line.includes("●")) ?? [];
+    let lines =
+      error?.message.split("\n").filter((line) => line.includes("●")) ?? [];
     if (lines.length > 0) {
       setSimpleError(lines[lines.length - 1].replace(/●\s*/, "").trim());
     }
-  }, [error]);
+  }, [error, getSuggestions]);
 
   return (
     <ErrorContext.Provider
       value={{
-        err: (msg: string, err: string | null) => {
+        err: (msg: string, err: AppError) => {
+          console.log(err);
           setMsg(msg);
           setError(err);
           setMoreDetailsOpen(false);
@@ -57,7 +88,8 @@ export const ErrorProvider: React.FC<{ children: React.ReactNode }> = ({
               onClick={() => {
                 navigator.clipboard.writeText(
                   "```\n" +
-                    (error?.replace(/^\n+/, "") ?? t("common.no_error")) +
+                    (error?.message.replace(/^\n+/, "") ??
+                      t("common.no_error")) +
                     "\n```",
                 );
                 toast.success(t("common.copied_success"));
@@ -67,29 +99,6 @@ export const ErrorProvider: React.FC<{ children: React.ReactNode }> = ({
             </button>
           </div>
           {simpleError && <pre className="error-inner">{simpleError}</pre>}
-          <p style={simpleError ? {} : { marginTop: "0.5rem" }}>
-            <Trans
-              i18nKey="error.support_message"
-              components={{
-                discord: (
-                  <span
-                    onClick={() => openUrl("https://discord.gg/EA6yVgydBz")}
-                    role="link"
-                    className="error-link"
-                  />
-                ),
-                github: (
-                  <span
-                    onClick={() =>
-                      openUrl("https://github.com/nab138/iloader/issues")
-                    }
-                    role="link"
-                    className="error-link"
-                  />
-                ),
-              }}
-            />
-          </p>
           {simpleError && (
             <p
               className="error-more-details"
@@ -102,16 +111,74 @@ export const ErrorProvider: React.FC<{ children: React.ReactNode }> = ({
           )}
           {simpleError && !moreDetailsOpen && (
             <pre className="error-inner error-details-measure">
-              {error?.replace(/^\n+/, "")}
+              {error?.message.replace(/^\n+/, "")}
             </pre>
           )}
           {(moreDetailsOpen || !simpleError) && (
             <pre
               className={`error-inner${simpleError ? " error-details" : ""}`}
             >
-              {error?.replace(/^\n+/, "")}
+              {error?.message.replace(/^\n+/, "")}
             </pre>
           )}
+          <div className="suggestions">
+            {suggestions.length > 0 && (
+              <h3>{t("error.suggestions_heading")}</h3>
+            )}
+            {suggestions.length > 0 && (
+              <ul>
+                {suggestions.map((s) => (
+                  <li key={s}>
+                    {s
+                      .split(/(\(\(link:[^)]+\)\)|\(\(link:[^)]+\)\))/g)
+                      .map((part, index) => {
+                        const parsed = parseLinkToken(part);
+                        if (parsed) {
+                          const { url, text } = parsed;
+                          return (
+                            <span
+                              key={index}
+                              onClick={() => openUrl(url)}
+                              role="link"
+                              className="error-link"
+                            >
+                              {text}
+                            </span>
+                          );
+                        }
+                        return <span key={index}>{part}</span>;
+                      })}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {error?.type !== "underage" && (
+              <p>
+                <Trans
+                  i18nKey="error.support_message"
+                  components={{
+                    discord: (
+                      <span
+                        onClick={() => openUrl("https://discord.gg/EA6yVgydBz")}
+                        role="link"
+                        className="error-link"
+                      />
+                    ),
+                    github: (
+                      <span
+                        onClick={() =>
+                          openUrl("https://github.com/nab138/iloader/issues")
+                        }
+                        role="link"
+                        className="error-link"
+                      />
+                    ),
+                  }}
+                />
+              </p>
+            )}
+          </div>
+
           <button
             onClick={() => {
               setError(null);
